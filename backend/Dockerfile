@@ -46,6 +46,11 @@ RUN apk add --no-cache ca-certificates tzdata sqlite
 # 设置时区为上海
 ENV TZ=Asia/Shanghai
 
+# 创建数据和配置目录
+RUN mkdir -p /app/data && \
+    touch /app/.env && \
+    chmod 666 /app/.env
+
 # 从builder阶段复制编译好的应用
 COPY --from=builder /app/main .
 # 复制静态文件
