@@ -33,14 +33,40 @@ Config::~Config() {
 }
 
 void Config::begin() {
+    Serial.println("开始初始化配置...");
+    
     // 打开Preferences
     if (preferences.begin(NAMESPACE, false)) {
+        Serial.println("Preferences初始化成功");
         loadConfig();
+        
         // 首次运行时保存默认配置
         if (!preferences.isKey(KEY_TANK_HEIGHT)) {
             Serial.println("首次运行，保存默认配置...");
+            resetToDefault();
             save();
         }
+        
+        // 验证关键参数
+        if (tankHeight <= 0) {
+            Serial.println("警告: 油箱高度无效，重置为默认值");
+            tankHeight = DEFAULT_TANK_HEIGHT;
+            save();
+        }
+        
+        // 打印当前配置
+        Serial.println("\n当前配置：");
+        Serial.printf("储油井深度: %.1f cm\n", tankHeight);
+        Serial.printf("传感器偏移: %.1f cm\n", sensorOffset);
+        Serial.printf("采样间隔: %d ms\n", sampleInterval);
+        Serial.printf("采样次数: %d\n", sampleCount);
+        Serial.printf("窗口大小: %d\n", windowSize);
+        Serial.printf("标准差阈值: %.1f\n", stdThreshold);
+        Serial.printf("低油位警告: %.1f%%\n", lowLevelAlert);
+        Serial.printf("高油位警告: %.1f%%\n", highLevelAlert);
+        Serial.printf("设备名称: %s\n", deviceName);
+        Serial.printf("WiFi名称: %s\n", wifiSSID);
+        Serial.println("------------------------");
     } else {
         Serial.println("Preferences初始化失败，使用默认配置");
         resetToDefault();

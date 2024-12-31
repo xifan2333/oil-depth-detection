@@ -13,7 +13,9 @@ public:
     void begin(unsigned long baudRate = 115200);
     
     // 发送数据到阿里云
-    bool sendData(float oilLevel, float confidence);
+    // @param distance: 原始测量距离(cm)
+    // @param confidence: 测量置信度(0-1)
+    bool sendData(float distance, float confidence);
     
     // 检查DTU状态
     bool checkStatus();

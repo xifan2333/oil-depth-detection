@@ -17,6 +17,11 @@ public:
     // 获取距离测量值
     float getDistance();
     
+    // 获取原始测量距离（单次测量）
+    float getRawDistance() {
+        return measureOnce();
+    }
+    
     // 获取测量置信度
     float getConfidenceScore() const { return confidenceScore; }
     

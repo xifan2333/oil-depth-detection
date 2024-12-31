@@ -77,7 +77,7 @@ private:
     static constexpr int DEFAULT_WINDOW_SIZE = 5;
     static constexpr float DEFAULT_STD_THRESHOLD = 5.0f;
     static constexpr float DEFAULT_LOW_LEVEL_ALERT = 20.0f;
-    static constexpr float DEFAULT_HIGH_LEVEL_ALERT = 90.0f;
+    static constexpr float DEFAULT_HIGH_LEVEL_ALERT = 150.0f;
     static const char DEFAULT_DEVICE_NAME[];
     static const char DEFAULT_WIFI_SSID[];
     static const char DEFAULT_WIFI_PASSWORD[];

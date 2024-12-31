@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>储油井监控系统 - 设备配置</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        h2 {
+            color: #666;
+            margin-bottom: 15px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        input[type="number"],
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .buttons {
+            margin-top: 20px;
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .save-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .cancel-btn {
+            background-color: #f44336;
+            color: white;
+        }
+        .error {
+            color: red;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>设备配置</h1>
+        </div>
+
+        <form id="configForm" onsubmit="return saveConfig(event)">
+            <div class="section">
+                <h2>基础参数</h2>
+                <div class="form-group">
+                    <label for="deviceName">设备名称</label>
+                    <input type="text" id="deviceName" name="device_name" maxlength="31" required>
+                    <div class="error" id="deviceName-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="tankHeight">储油井深度 (cm)</label>
+                    <input type="number" id="tankHeight" name="tank_height" step="0.1" min="0" required>
+                    <div class="error" id="tankHeight-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="sensorOffset">传感器偏移量 (cm)</label>
+                    <input type="number" id="sensorOffset" name="sensor_offset" step="0.1" min="0" required>
+                    <div class="error" id="sensorOffset-error"></div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>采样参数</h2>
+                <div class="form-group">
+                    <label for="sampleInterval">采样间隔 (ms)</label>
+                    <input type="number" id="sampleInterval" name="sample_interval" min="100" step="100" required>
+                    <div class="error" id="sampleInterval-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="sampleCount">单次采样次数 (1-20)</label>
+                    <input type="number" id="sampleCount" name="sample_count" min="1" max="20" required>
+                    <div class="error" id="sampleCount-error"></div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>报警参数</h2>
+                <div class="form-group">
+                    <label for="lowLevelAlert">低油位警告阈值 (%)</label>
+                    <input type="number" id="lowLevelAlert" name="low_level_alert" min="0" max="100" step="0.1" required>
+                    <div class="error" id="lowLevelAlert-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="highLevelAlert">高油位警告阈值 (%)</label>
+                    <input type="number" id="highLevelAlert" name="high_level_alert" min="0" max="100" step="0.1" required>
+                    <div class="error" id="highLevelAlert-error"></div>
+                </div>
+            </div>
+
+            <div class="buttons">
+                <button type="submit" class="save-btn">保存配置</button>
+                <button type="button" class="cancel-btn" onclick="goBack()">返回</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // 获取URL参数中的设备ID
+        function getDeviceId() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('id');
+        }
+
+        // 加载设备配置
+        async function loadConfig() {
+            const deviceId = getDeviceId();
+            if (!deviceId) return; // 新设备不需要加载配置
+
+            try {
+                const response = await fetch(`/api/devices/${deviceId}`);
+                if (!response.ok) throw new Error('获取设备配置失败');
+                const device = await response.json();
+                
+                // 填充表单
+                document.getElementById('deviceName').value = device.name || device.device_id;
+                document.getElementById('tankHeight').value = device.tank_height || '';
+                document.getElementById('sensorOffset').value = device.sensor_offset || '';
+                document.getElementById('sampleInterval').value = device.sample_interval || '';
+                document.getElementById('sampleCount').value = device.sample_count || '';
+                document.getElementById('lowLevelAlert').value = device.low_level_alert || '';
+                document.getElementById('highLevelAlert').value = device.high_level_alert || '';
+            } catch (error) {
+                console.error('加载配置失败:', error);
+            }
+        }
+
+        // 保存配置
+        async function saveConfig(event) {
+            event.preventDefault();
+            
+            // 收集表单数据
+            const formData = new FormData(event.target);
+            const config = Object.fromEntries(formData.entries());
+            
+            // 转换数值类型
+            ['tank_height', 'sensor_offset', 'sample_interval', 'sample_count', 
+             'low_level_alert', 'high_level_alert'].forEach(key => {
+                config[key] = Number(config[key]);
+            });
+
+            const deviceId = getDeviceId();
+            const url = `/api/devices/${deviceId}/config`;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        device_id: deviceId,
+                        ...config
+                    })
+                });
+
+                if (!response.ok) throw new Error('保存配置失败');
+                
+                alert('配置已保存');
+                goBack();
+            } catch (error) {
+                alert('保存配置失败: ' + error.message);
+            }
+            
+            return false;
+        }
+
+        // 返回上一页
+        function goBack() {
+            const deviceId = getDeviceId();
+            location.href = deviceId ? `/device.html?id=${deviceId}` : '/';
+        }
+
+        // 辅助函数：转换为驼峰命名
+        function toCamelCase(str) {
+            return str.replace(/_([a-z])/g, g => g[1].toUpperCase());
+        }
+
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', loadConfig);
+    </script>
+</body>
+</html> 

@@ -31,7 +31,11 @@ type AmqpClient struct {
 	stopChan        chan struct{}  // 用于通知消息处理停止
 	isClosed        bool           // 标记客户端是否已关闭
 	mu              sync.Mutex     // 保护 isClosed 字段
+	offlineChecker  *time.Ticker   // 离线检测定时器
 }
+
+// 设备离线超时时间（如果超过这个时间没有收到消息，就认为设备离线）
+const DeviceOfflineTimeout = 5 * time.Minute
 
 func NewAmqpClient(clientID, accessKey, accessSecret, consumerGroupID, iotInstanceID, host string) *AmqpClient {
 	// 将 mqtt 域名转换为 amqp 域名
@@ -45,6 +49,56 @@ func NewAmqpClient(clientID, accessKey, accessSecret, consumerGroupID, iotInstan
 		host:            host,
 		stopChan:        make(chan struct{}),
 	}
+}
+
+// 启动离线检测
+func (c *AmqpClient) startOfflineDetection(ctx context.Context) {
+	c.offlineChecker = time.NewTicker(1 * time.Minute)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				c.offlineChecker.Stop()
+				return
+			case <-c.stopChan:
+				c.offlineChecker.Stop()
+				return
+			case <-c.offlineChecker.C:
+				if err := c.checkOfflineDevices(); err != nil {
+					log.Printf("检查离线设备失败: %v", err)
+				}
+			}
+		}
+	}()
+}
+
+// 检查离线设备
+func (c *AmqpClient) checkOfflineDevices() error {
+	// 获取所有在线设备
+	devices, err := models.GetOnlineDevices()
+	if err != nil {
+		return fmt.Errorf("获取在线设备失败: %v", err)
+	}
+
+	now := time.Now()
+	for _, device := range devices {
+		// 获取设备最后一次更新时间
+		lastUpdate, err := models.GetDeviceLastUpdate(device.DeviceID)
+		if err != nil {
+			log.Printf("获取设备 %s 最后更新时间失败: %v", device.DeviceID, err)
+			continue
+		}
+
+		// 如果超过离线超时时间没有更新，则标记为离线
+		if now.Sub(lastUpdate) > DeviceOfflineTimeout {
+			if err := models.UpdateDeviceStatus(device.DeviceID, models.DeviceStatusOffline); err != nil {
+				log.Printf("更新设备 %s 状态为离线失败: %v", device.DeviceID, err)
+			} else {
+				log.Printf("设备 %s 已离线，最后更新时间: %v", device.DeviceID, lastUpdate)
+			}
+		}
+	}
+	return nil
 }
 
 func (c *AmqpClient) Connect(ctx context.Context) error {
@@ -85,6 +139,9 @@ func (c *AmqpClient) Connect(ctx context.Context) error {
 		return fmt.Errorf("创建接收器失败: %v", err)
 	}
 
+	// 启动离线检测
+	c.startOfflineDetection(ctx)
+
 	return nil
 }
 
@@ -95,6 +152,11 @@ func (c *AmqpClient) Close() {
 		return
 	}
 	c.isClosed = true
+
+	// 停止离线检测
+	if c.offlineChecker != nil {
+		c.offlineChecker.Stop()
+	}
 
 	// 保存当前连接的本地副本
 	receiver := c.receiver
@@ -190,6 +252,7 @@ type LocationMessage struct {
 // DeviceStatusMessage 设备状态消息结构（包含油位、配置等信息）
 type DeviceStatusMessage struct {
 	OilLevel       float64 `json:"oilLevel"`       // 当前油位高度
+	Distance       float64 `json:"distance"`       // 距离油面的距离
 	Confidence     float64 `json:"confidence"`     // 测量置信度
 	Timestamp      int64   `json:"timestamp"`      // 测量时间戳
 	LowLevelAlert  float64 `json:"lowLevelAlert"`  // 低油位警报阈值
@@ -265,13 +328,14 @@ func (c *AmqpClient) processMessage(msg *amqp.Message) error {
 	// 尝试解析为设备状态消息
 	var statusMsg DeviceStatusMessage
 	if err := json.Unmarshal([]byte(rawData), &statusMsg); err == nil && statusMsg.OilLevel != 0 {
-		log.Printf("收到设备状态消息: 油位=%.2f, 置信度=%.2f, 油罐高度=%.2f",
-			statusMsg.OilLevel, statusMsg.Confidence, statusMsg.TankHeight)
+		log.Printf("收到设备状态消息: 油位=%.2f, 距离=%.2f, 置信度=%.2f, 油罐高度=%.2f",
+			statusMsg.OilLevel, statusMsg.Distance, statusMsg.Confidence, statusMsg.TankHeight)
 
 		// 保存油量数据
 		oilData := &models.OilLevel{
 			DeviceID:   deviceID,
 			Level:      statusMsg.OilLevel,
+			Distance:   statusMsg.Distance,
 			Confidence: statusMsg.Confidence,
 			Timestamp:  messageTime,
 		}

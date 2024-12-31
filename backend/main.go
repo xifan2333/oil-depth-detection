@@ -71,6 +71,7 @@ func main() {
 	api.SetupRoutes(r)
 
 	// 设置静态文件服务
+	r.Static("/static", "./static")
 	r.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
 

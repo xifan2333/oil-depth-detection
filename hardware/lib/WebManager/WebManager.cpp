@@ -185,7 +185,7 @@ void WebManager::updateMeasurement(float oilLevel) {
     lastUpdateTime = millis();
     
     // 不在这里调用回调，而是在handleGetData中使用存储的数据
-    Serial.print("更新测量数据: ");
+    Serial.print("油位: ");
     Serial.print(oilLevel);
     Serial.println(" cm");
 } 

@@ -45,6 +45,7 @@ type OilLevel struct {
 	gorm.Model `json:"-"`
 	DeviceID   string    `gorm:"index;not null" json:"-"`
 	Level      float64   `gorm:"not null" json:"oil_level"`
+	Distance   float64   `gorm:"not null" json:"distance"`
 	Confidence float64   `gorm:"not null" json:"confidence"`
 	Timestamp  time.Time `gorm:"not null" json:"timestamp"`
 }
@@ -57,11 +58,13 @@ type DeviceData struct {
 	Latitude       float64      `json:"latitude"`
 	LocationType   string       `json:"location_type"`
 	OilLevel       float64      `json:"oil_level"`
+	Distance       float64      `json:"distance"`
 	Confidence     float64      `json:"confidence"`
 	RemainingOil   float64      `json:"remaining_oil"`
 	LowLevelAlert  float64      `json:"low_level_alert"`
 	HighLevelAlert float64      `json:"high_level_alert"`
 	TankHeight     float64      `json:"tank_height"`
+	UpdateAt       int64        `json:"update_at"`
 }
 
 // OilLevelHistory 油位历史记录
@@ -149,16 +152,20 @@ func GetDeviceData(deviceID string) (*DeviceData, error) {
 		LowLevelAlert:  device.LowLevelAlert,
 		HighLevelAlert: device.HighLevelAlert,
 		TankHeight:     device.TankHeight,
+		UpdateAt:       device.UpdatedAt.Unix(),
 	}
 
 	if oilErr != gorm.ErrRecordNotFound {
 		data.OilLevel = oilLevel.Level
+		data.Distance = oilLevel.Distance
 		data.Confidence = oilLevel.Confidence
-		// 计算余量，保留四位小数
+		// 计算余量，转换为百分比(0-100)
 		if device.TankHeight > 0 {
-			data.RemainingOil = (device.TankHeight - oilLevel.Level) / device.TankHeight
-			data.RemainingOil, _ = strconv.ParseFloat(fmt.Sprintf("%.4f", data.RemainingOil), 64)
+			data.RemainingOil = (oilLevel.Level / device.TankHeight) * 100
+			data.RemainingOil, _ = strconv.ParseFloat(fmt.Sprintf("%.1f", data.RemainingOil), 64)
 		}
+		// 使用最新的油位数据时间作为更新时间
+		data.UpdateAt = oilLevel.Timestamp.Unix()
 	}
 
 	if location != nil {
@@ -193,16 +200,19 @@ func GetAllDevices() ([]DeviceData, error) {
 			LowLevelAlert:  device.LowLevelAlert,
 			HighLevelAlert: device.HighLevelAlert,
 			TankHeight:     device.TankHeight,
+			UpdateAt:       device.UpdatedAt.Unix(),
 		}
 
 		if oilErr != gorm.ErrRecordNotFound {
 			data.OilLevel = oilLevel.Level
 			data.Confidence = oilLevel.Confidence
-			// 计算余量，保留四位小数
+			// 计算余量，转换为百分比(0-100)
 			if device.TankHeight > 0 {
-				data.RemainingOil = (device.TankHeight - oilLevel.Level) / device.TankHeight
-				data.RemainingOil, _ = strconv.ParseFloat(fmt.Sprintf("%.4f", data.RemainingOil), 64)
+				data.RemainingOil = (oilLevel.Level / device.TankHeight) * 100
+				data.RemainingOil, _ = strconv.ParseFloat(fmt.Sprintf("%.1f", data.RemainingOil), 64)
 			}
+			// 使用最新的油位数据时间作为更新时间
+			data.UpdateAt = oilLevel.Timestamp.Unix()
 		}
 
 		if location != nil {
@@ -247,8 +257,8 @@ func GetDeviceHistory(deviceID string, limit int, startTime, endTime time.Time) 
 	for _, oil := range oilLevels {
 		var remaining float64
 		if device.TankHeight > 0 {
-			remaining = (device.TankHeight - oil.Level) / device.TankHeight
-			remaining, _ = strconv.ParseFloat(fmt.Sprintf("%.4f", remaining), 64)
+			remaining = (oil.Level / device.TankHeight) * 100
+			remaining, _ = strconv.ParseFloat(fmt.Sprintf("%.1f", remaining), 64)
 		}
 		history = append(history, OilLevelHistory{
 			OilLevel:     oil.Level,
@@ -302,4 +312,53 @@ func PublishDeviceConfig(topic string, config interface{}) error {
 	}
 
 	return nil
+}
+
+// GetOnlineDevices 获取所有在线设备
+func GetOnlineDevices() ([]Device, error) {
+	var devices []Device
+	err := DB.Where("status = ?", DeviceStatusOnline).Find(&devices).Error
+	return devices, err
+}
+
+// GetDeviceLastUpdate 获取设备最后一次更新时间
+func GetDeviceLastUpdate(deviceID string) (time.Time, error) {
+	// 获取最新的油位数据时间
+	var oilLevel OilLevel
+	err := DB.Where("device_id = ?", deviceID).
+		Order("timestamp desc").
+		First(&oilLevel).Error
+
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return time.Time{}, err
+	}
+
+	// 获取最新的位置数据时间
+	var location Location
+	locErr := DB.Where("device_id = ?", deviceID).
+		Order("timestamp desc").
+		First(&location).Error
+
+	if locErr != nil && locErr != gorm.ErrRecordNotFound {
+		return time.Time{}, locErr
+	}
+
+	// 如果两种数据都没有，返回错误
+	if err == gorm.ErrRecordNotFound && locErr == gorm.ErrRecordNotFound {
+		return time.Time{}, gorm.ErrRecordNotFound
+	}
+
+	// 返回最新的时间
+	if err == gorm.ErrRecordNotFound {
+		return location.Timestamp, nil
+	}
+	if locErr == gorm.ErrRecordNotFound {
+		return oilLevel.Timestamp, nil
+	}
+
+	// 返回最新的时间
+	if oilLevel.Timestamp.After(location.Timestamp) {
+		return oilLevel.Timestamp, nil
+	}
+	return location.Timestamp, nil
 }

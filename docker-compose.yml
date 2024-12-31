@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - sqlite_data:/app/data
+    environment:
+      - ALIYUN_IOT_INSTANCE_ID
+      - ALIYUN_ACCESS_KEY
+      - ALIYUN_ACCESS_SECRET
+    restart: always
+
+volumes:
+  sqlite_data: 

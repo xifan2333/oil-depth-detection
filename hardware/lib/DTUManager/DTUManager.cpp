@@ -10,24 +10,46 @@ void DTUManager::begin(unsigned long baudRate) {
     isInitialized = true;
 }
 
-bool DTUManager::sendData(float oilLevel, float confidence) {
+bool DTUManager::sendData(float distance, float confidence) {
     if (!isInitialized) {
         return false;
     }
     
+    // 获取配置值并检查有效性
+    float tankHeight = config.getTankHeight();
+    float sensorOffset = config.getSensorOffset();
+    
+    // 如果关键参数无效，打印调试信息
+    if (tankHeight <= 0) {
+        Serial.println("警告: 油箱高度无效 (0)");
+        Serial.printf("当前配置值:\n");
+        Serial.printf("储油井深度: %.1f cm\n", config.getTankHeight());
+        Serial.printf("传感器偏移: %.1f cm\n", config.getSensorOffset());
+        return false;
+    }
+    
+    // 计算油位
+    float oilLevel = tankHeight - (distance - sensorOffset);
+    
     // 构建JSON数据
     StaticJsonDocument<200> doc;
-    doc["oilLevel"] = oilLevel;
-    doc["confidence"] = confidence;
-    doc["timestamp"] = millis();
-    doc["lowLevelAlert"] = config.getLowLevelAlert();
-    doc["highLevelAlert"] = config.getHighLevelAlert();
-    doc["tankHeight"] = config.getTankHeight();
+    doc["distance"] = distance;           // 原始测量距离
+    doc["sensorOffset"] = sensorOffset;   // 传感器偏移量
+    doc["oilLevel"] = oilLevel;          // 计算得到的油位
+    doc["confidence"] = confidence;       // 测量置信度
+    doc["timestamp"] = millis();         // 时间戳
+    doc["tankHeight"] = tankHeight;      // 油箱高度
+    doc["lowLevelAlert"] = config.getLowLevelAlert();    // 低油位警告
+    doc["highLevelAlert"] = config.getHighLevelAlert();  // 高油位警告
     
     // 序列化并发送
     String jsonString;
     serializeJson(doc, jsonString);
     dtuSerial.println(jsonString);
+    
+    // 打印发送的数据
+    Serial.print("DTU发送数据: ");
+    Serial.println(jsonString);
     
     return true;
 }
