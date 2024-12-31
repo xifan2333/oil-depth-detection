@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>储油井监控系统 - 配置</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        h2 {
+            color: #666;
+            margin-bottom: 15px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        input[type="number"],
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .buttons {
+            margin-top: 20px;
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .save-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .reset-btn {
+            background-color: #f44336;
+            color: white;
+        }
+        .nav-btn {
+            background-color: #2196F3;
+            color: white;
+        }
+        .error {
+            color: red;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>储油井监控系统配置</h1>
+        <form id="configForm" onsubmit="return saveConfig(event)">
+            <div class="section">
+                <h2>基础参数</h2>
+                <div class="form-group">
+                    <label for="tankHeight">储油井深度 (cm)</label>
+                    <input type="number" id="tankHeight" name="tankHeight" step="0.1" min="0" required>
+                    <div class="error" id="tankHeight-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="sensorOffset">传感器偏移量 (cm)</label>
+                    <input type="number" id="sensorOffset" name="sensorOffset" step="0.1" min="0" required>
+                    <div class="error" id="sensorOffset-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="sampleInterval">采样间隔 (ms)</label>
+                    <input type="number" id="sampleInterval" name="sampleInterval" min="100" step="100" required>
+                    <div class="error" id="sampleInterval-error"></div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>滤波参数</h2>
+                <div class="form-group">
+                    <label for="sampleCount">单次采样次数 (1-20)</label>
+                    <input type="number" id="sampleCount" name="sampleCount" min="1" max="20" required>
+                    <div class="error" id="sampleCount-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="windowSize">滑动窗口大小 (1-50)</label>
+                    <input type="number" id="windowSize" name="windowSize" min="1" max="50" required>
+                    <div class="error" id="windowSize-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="stdThreshold">标准差阈值</label>
+                    <input type="number" id="stdThreshold" name="stdThreshold" step="0.1" min="0" required>
+                    <div class="error" id="stdThreshold-error"></div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>报警参数</h2>
+                <div class="form-group">
+                    <label for="lowLevelAlert">低油位警告阈值 (%)</label>
+                    <input type="number" id="lowLevelAlert" name="lowLevelAlert" min="0" max="100" step="0.1" required>
+                    <div class="error" id="lowLevelAlert-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="highLevelAlert">高油位警告阈值 (%)</label>
+                    <input type="number" id="highLevelAlert" name="highLevelAlert" min="0" max="100" step="0.1" required>
+                    <div class="error" id="highLevelAlert-error"></div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>设备参数</h2>
+                <div class="form-group">
+                    <label for="deviceName">设备名称</label>
+                    <input type="text" id="deviceName" name="deviceName" maxlength="31" required>
+                    <div class="error" id="deviceName-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="wifiSSID">WiFi名称</label>
+                    <input type="text" id="wifiSSID" name="wifiSSID" maxlength="31" required>
+                    <div class="error" id="wifiSSID-error"></div>
+                </div>
+                <div class="form-group">
+                    <label for="wifiPassword">WiFi密码</label>
+                    <input type="password" id="wifiPassword" name="wifiPassword" maxlength="63">
+                    <div class="error" id="wifiPassword-error"></div>
+                </div>
+            </div>
+
+            <div class="buttons">
+                <button type="submit" class="save-btn">保存配置</button>
+                <button type="button" class="reset-btn" onclick="resetConfig()">恢复默认</button>
+                <button type="button" class="nav-btn" onclick="location.href='/dashboard.html'">查看监控</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // 加载配置
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/config');
+                if (!response.ok) throw new Error('加载配置失败');
+                const config = await response.json();
+                
+                // 填充表单
+                Object.keys(config).forEach(key => {
+                    const input = document.getElementById(key);
+                    if (input) input.value = config[key];
+                });
+            } catch (error) {
+                alert('加载配置失败: ' + error.message);
+            }
+        }
+
+        // 保存配置
+        async function saveConfig(event) {
+            event.preventDefault();
+            
+            // 收集表单数据
+            const formData = new FormData(event.target);
+            const config = Object.fromEntries(formData.entries());
+            
+            try {
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(config)
+                });
+
+                if (!response.ok) throw new Error('保存配置失败');
+                
+                alert('配置已保存');
+                loadConfig(); // 重新加载配置
+            } catch (error) {
+                alert('保存配置失败: ' + error.message);
+            }
+            
+            return false;
+        }
+
+        // 重置配置
+        async function resetConfig() {
+            if (!confirm('确定要恢复默认配置吗？')) return;
+            
+            try {
+                const response = await fetch('/api/config/reset', {
+                    method: 'POST'
+                });
+
+                if (!response.ok) throw new Error('重置配置失败');
+                
+                alert('已恢复默认配置');
+                loadConfig(); // 重新加载配置
+            } catch (error) {
+                alert('重置配置失败: ' + error.message);
+            }
+        }
+
+        // 页面加载时获取配置
+        document.addEventListener('DOMContentLoaded', loadConfig);
+    </script>
+</body>
+</html>
