@@ -19,10 +19,8 @@ import (
 )
 
 func main() {
-	// 加载 .env 文件，忽略错误
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, using environment variables")
-	}
+	// 加载环境变量
+	_ = godotenv.Load()
 
 	// 初始化数据库
 	if err := models.InitDB("app.db"); err != nil {
