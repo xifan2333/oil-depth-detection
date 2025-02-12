@@ -1,0 +1,6 @@
+{
+    "cmake.sourceDirectory": "C:/Users/xifan/code/oil-depth-detection/hardware",
+    "idf.portWin": "COM24",
+    "idf.espIdfPathWin": "C:\\Users\\xifan\\esp\\v5.3.2\\esp-idf",
+    "idf.toolsPathWin": "C:\\Espressif"
+}
