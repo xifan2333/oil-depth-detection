@@ -14,6 +14,7 @@ bool Modem::begin(HardwareSerial& uart) {
     _initialized = true;
     
     LOG_MODULE("MODEM");
+    LOG_LEVEL(LogLevel::INFO);
     LOG_D("初始化调制解调器");
     return isReady();
 }

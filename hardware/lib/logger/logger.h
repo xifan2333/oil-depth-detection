@@ -61,6 +61,7 @@ private:
 // 全局宏定义
 #define LOGGER Logger::getInstance()
 #define LOG_MODULE(name) LOGGER.setModule(name)
+#define LOG_LEVEL(level) LOGGER.setLogLevel(level)
 #define LOG_D(msg) LOGGER.debug(msg)
 #define LOG_I(msg) LOGGER.info(msg)
 #define LOG_W(msg) LOGGER.warning(msg)

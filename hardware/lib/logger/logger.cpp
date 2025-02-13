@@ -50,12 +50,12 @@ void Logger::_print(const char* level, const String& message) {
     _formatTime(timeStr, sizeof(timeStr));
     
     _serial->print(timeStr);
-    _serial->print("-");
+    _serial->print(" - ");
     if (_moduleName[0] != '\0') {
         _serial->print(_moduleName);
-        _serial->print("-");
+        _serial->print(" - ");
     }
     _serial->print(level);
-    _serial->print("-");
+    _serial->print(" - ");
     _serial->println(message);
 } 
