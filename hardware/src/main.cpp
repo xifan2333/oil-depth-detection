@@ -71,6 +71,37 @@ void testPPPconnect() {
     }
 }
 
+void testModemMode() {
+    Serial.println("\n========= 模式检测测试 =========");
+    
+    // 测试命令模式
+    Serial.println("\n1. 测试命令模式检测:");
+    if (modem.isCommandMode()) {
+        Serial.println("当前在命令模式");
+        String response = modem.sendCommand("AT+CSQ");
+        Serial.println("信号强度查询: " + response);
+    } else {
+        Serial.println("当前不在命令模式");
+    }
+
+    // 尝试PPP拨号
+    Serial.println("\n2. 尝试PPP拨号:");
+    if (modem.connect("CMNET", "", "")) {
+        Serial.println("PPP拨号成功");
+        delay(2000); // 等待PPP协商完成
+        
+        // 检查数据模式
+        Serial.println("\n3. 检查数据模式:");
+        if (!modem.isCommandMode()) {
+           Serial.println("当前在数据模式");
+        } else {
+            Serial.println("未检测到PPP数据流");
+        }
+    } else {
+        Serial.println("PPP拨号失败");
+    }
+}
+
 void processSerialCommand() {
     if (Serial.available()) {
         String command = Serial.readStringUntil('\n');
@@ -122,22 +153,19 @@ void setup() {
     }
     Serial.println("调制解调器初始化成功!");
     
+    // 获取网络时间并更新RTC
+    time_t networkTime = modem.getNetworkTime();
+    if (networkTime > 0) {
+        Serial.println("网络时间同步成功: " + String(networkTime));
+    } else {
+        Serial.println("网络时间同步失败");
+    }
+    
     // 执行基础功能测试
     testModemBasicFunctions();
     
-    // 尝试PPP拨号 - 使用中国移动APN
-    if (modem.connect("CMNET", "", "")) {  // 中国移动APN为"CMNET"
-        Serial.println("PPP连接成功");
-        
-        // 定期检查PPP状态
-        if (modem.checkPPPStatus()) {
-            Serial.println("PPP连接正常，已分配IP地址");
-        } else {
-            Serial.println("PPP连接异常，需要重新连接");
-        }
-    } else {
-        Serial.println("PPP连接失败");
-    }
+    // 添加模式检测测试
+    testModemMode();
     
     Serial.println("\n============================");
     Serial.println("可用命令:");

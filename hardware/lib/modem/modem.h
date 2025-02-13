@@ -6,9 +6,10 @@
 #include <Arduino.h>
 #include <PPP.h>
 #include <NetworkInterface.h>
-#include "logger.h"  // 添加logger头文件
+#include "logger.h" // 添加logger头文件
 
-class Modem {
+class Modem
+{
 public:
     Modem();
     ~Modem();
@@ -18,15 +19,7 @@ public:
      * @param uart 串口对象
      * @return 是否初始化成功
      */
-    bool begin(HardwareSerial& uart);
-    
-    /**
-     * 发送AT指令并等待响应
-     * @param command AT指令
-     * @param timeout 超时时间(ms)
-     * @return 调制解调器返回的响应字符串
-     */
-    String sendCommand(const String& command, uint32_t timeout = 1000);
+    bool begin(HardwareSerial &uart);
 
     /**
      * 检查调制解调器是否就绪
@@ -41,13 +34,16 @@ public:
     String getIMEI();
 
     /**
-     * 进行PPP拨号
-     * @param apn APN名称
-     * @param username 用户名(可选)
-     * @param password 密码(可选)
-     * @return 是否拨号成功
+     * 从网络获取时间并更新RTC
+     * @return 获取到的时间戳，失败返回0
      */
-    bool connect(const char* apn, const char* username = "", const char* password = "");
+    time_t getNetworkTime();
+
+    /**
+     * 检查当前是否处于命令模式
+     * @return true: 命令模式, false: 数据模式
+     */
+    bool isCommandMode();
 
     /**
      * 切换到命令模式
@@ -62,6 +58,23 @@ public:
     bool setDataMode();
 
     /**
+     * 发送AT指令并等待响应
+     * @param command AT指令
+     * @param timeout 超时时间(ms)
+     * @return 调制解调器返回的响应字符串
+     */
+    String sendCommand(const String &command, uint32_t timeout = 1000);
+
+    /**
+     * 进行PPP拨号
+     * @param apn APN名称
+     * @param username 用户名(可选)
+     * @param password 密码(可选)
+     * @return 是否拨号成功
+     */
+    bool connect(const char *apn, const char *username = "", const char *password = "");
+
+    /**
      * 断开PPP连接
      * @return 是否断开成功
      */
@@ -74,16 +87,15 @@ public:
     bool checkPPPStatus();
 
 private:
-    HardwareSerial* _uart;     // 串口对象指针
-    PPPClass _ppp;             // PPP对象
-    bool _initialized;          // 初始化标志
-    bool _inDataMode;          // 数据模式标志
-    
+    HardwareSerial *_uart; // 串口对象指针
+    PPPClass _ppp;         // PPP对象
+    bool _initialized;     // 初始化标志
+
     /**
      * 清空串口缓冲区
      */
     void flushInput();
-    
+
     /**
      * 等待指定时间
      * @param ms 等待时间(毫秒)

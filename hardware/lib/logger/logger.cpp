@@ -58,4 +58,15 @@ void Logger::_print(const char* level, const String& message) {
     _serial->print(level);
     _serial->print(" - ");
     _serial->println(message);
+}
+
+String Logger::getTimestamp() {
+    time_t now;
+    time(&now);  // 获取系统当前时间
+    struct tm timeinfo;
+    localtime_r(&now, &timeinfo);
+    
+    char buffer[32];
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
+    return String(buffer);
 } 

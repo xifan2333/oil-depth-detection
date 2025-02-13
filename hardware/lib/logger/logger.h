@@ -42,6 +42,12 @@ public:
         _timeOffset = timestamp - (millis() / 1000);
     }
 
+    /**
+     * 获取当前系统时间的格式化字符串
+     * @return 格式化的时间字符串 (YYYY-MM-DD HH:mm:ss)
+     */
+    String getTimestamp();
+
 private:
     Logger() : _serial(&Serial), _level(LogLevel::DEBUG), _timeOffset(0) {
         _moduleName[0] = '\0';
