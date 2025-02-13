@@ -6,6 +6,7 @@
 #include <Arduino.h>
 #include <PPP.h>
 #include <NetworkInterface.h>
+#include "logger.h"  // 添加logger头文件
 
 class Modem {
 public:
@@ -46,19 +47,19 @@ public:
      * @param password 密码(可选)
      * @return 是否拨号成功
      */
-    bool dial(const char* apn, const char* username = "", const char* password = "");
+    bool connect(const char* apn, const char* username = "", const char* password = "");
 
     /**
      * 切换到命令模式
      * @return 是否切换成功
      */
-    bool enterCommandMode();
+    bool setCommandMode();
 
     /**
      * 切换到数据模式
      * @return 是否切换成功
      */
-    bool enterDataMode();
+    bool setDataMode();
 
     /**
      * 断开PPP连接

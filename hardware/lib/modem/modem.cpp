@@ -1,4 +1,5 @@
 #include "modem.h"
+#include "logger.h"
 
 Modem modem;
 
@@ -12,50 +13,45 @@ bool Modem::begin(HardwareSerial& uart) {
     _uart = &uart;
     _initialized = true;
     
-    // 测试AT指令是否响应
+    LOG_MODULE("MODEM");
+    LOG_D("初始化调制解调器");
     return isReady();
 }
 
 String Modem::sendCommand(const String& command, uint32_t timeout) {
     if (!_initialized || !_uart) {
-        Serial.println("DEBUG: 调制解调器未初始化");
+        LOG_E("调制解调器未初始化");
         return "";
     }
 
-    Serial.println("DEBUG: 清空接收缓冲区");
+    LOG_D("清空接收缓冲区");
     flushInput();
     
-    Serial.println("DEBUG: 发送命令: " + command);
+    LOG_D("发送命令: " + command);
     _uart->println(command);
     
     String response;
     unsigned long startTime = millis();
     
-    Serial.println("DEBUG: 等待响应...");
+    LOG_D("等待响应...");
     while (millis() - startTime < timeout) {
         if (_uart->available()) {
             char c = _uart->read();
             response += c;
             
-            // 打印接收到的每个字符
-            Serial.printf("DEBUG: 收到字符: 0x%02X ", (uint8_t)c);
-            if (isprint(c)) {
-                Serial.printf("('%c')", c);
-            }
-            Serial.println();
+            LOG_F("收到字符: 0x%02X %c", (uint8_t)c, isprint(c) ? c : ' ');
             
-            // 检查是否收到完整响应
             if (response.endsWith("\r\nOK\r\n") || 
                 response.endsWith("\r\nERROR\r\n") ||
                 response.endsWith("\r\nNO CARRIER\r\n")) {
-                Serial.println("DEBUG: 收到完整响应");
+                LOG_D("收到完整响应");
                 break;
             }
         }
         yield();
     }
     
-    Serial.println("DEBUG: 完整响应: " + response);
+    LOG_D("完整响应: " + response);
     return response;
 }
 
@@ -89,65 +85,65 @@ String Modem::getIMEI() {
     return "";
 }
 
-bool Modem::dial(const char* apn, const char* username, const char* password) {
+bool Modem::connect(const char* apn, const char* username, const char* password) {
     static int connectCount = 0;  // 连接尝试计数
     
     // 如果尝试次数超过5次，返回失败
     if (connectCount >= 5) {
-        Serial.println("DEBUG: 连接尝试次数超过5次，放弃连接");
+        LOG_E("连接尝试次数超过5次，放弃连接");
         connectCount = 0;
         return false;
     }
 
     // 确保在命令模式
-    if (_inDataMode && !enterCommandMode()) {
+    if (_inDataMode && !setCommandMode()) {
         return false;
     }
 
     // 1. 检查SIM卡状态
-    Serial.println("DEBUG: 检查SIM卡状态");
+    LOG_D("检查SIM卡状态");
     String response = sendCommand("AT+CPIN?");
     if (response.indexOf("+CPIN: READY") < 0) {
-        Serial.println("DEBUG: SIM卡未就绪");
+        LOG_E("SIM卡未就绪");
         return false;
     }
 
     // 2. 检查网络注册状态
-    Serial.println("DEBUG: 检查网络注册状态");
+    LOG_D("检查网络注册状态");
     response = sendCommand("AT+CREG?");
     if (response.indexOf("+CREG: 0,1") < 0 && response.indexOf("+CREG: 0,5") < 0) {
-        Serial.println("DEBUG: 等待60秒进行网络注册");
+        LOG_W("等待60秒进行网络注册");
         delay_ms(60000);  // 等待60秒
         response = sendCommand("AT+CREG?");
         if (response.indexOf("+CREG: 0,1") < 0 && response.indexOf("+CREG: 0,5") < 0) {
-            Serial.println("DEBUG: 网络注册失败");
+            LOG_E("网络注册失败");
             connectCount++;
-            return dial(apn, username, password);  // 递归重试
+            return connect(apn, username, password);
         }
     }
 
     // 3. 检查PS网络附着状态
-    Serial.println("DEBUG: 检查PS网络附着状态");
+    LOG_D("检查PS网络附着状态");
     response = sendCommand("AT+CGATT?");
     if (response.indexOf("+CGATT: 1") < 0) {
-        Serial.println("DEBUG: 尝试PS网络附着");
+        LOG_D("尝试PS网络附着");
         if (sendCommand("AT+CGATT=1").indexOf("OK") < 0) {
-            Serial.println("DEBUG: PS网络附着失败");
+            LOG_E("PS网络附着失败");
             connectCount++;
-            return dial(apn, username, password);
+            return connect(apn, username, password);
         }
         delay_ms(2000);  // 等待PS附着完成
     }
 
     // 4. 设置APN
-    Serial.println("DEBUG: 设置APN");
+    LOG_D("设置APN");
     String cmd = "AT+CGDCONT=1,\"IP\",\"";
     cmd += apn;
     cmd += "\"";
     if (sendCommand(cmd).indexOf("OK") < 0) {
-        Serial.println("DEBUG: APN设置失败");
+        LOG_E("APN设置失败");
         connectCount++;
-        return dial(apn, username, password);
+        return connect(apn, username, password);
     }
 
     // 如果提供了用户名和密码，设置认证信息
@@ -158,35 +154,35 @@ bool Modem::dial(const char* apn, const char* username, const char* password) {
         cmd += password;
         cmd += "\"";
         if (sendCommand(cmd).indexOf("OK") < 0) {
-            Serial.println("DEBUG: 认证信息设置失败");
+            LOG_E("认证信息设置失败");
             connectCount++;
-            return dial(apn, username, password);
+            return connect(apn, username, password);
         }
     }
 
     // 5. 开始PPP拨号
-    Serial.println("DEBUG: 开始PPP拨号");
+    LOG_D("开始PPP拨号");
     response = sendCommand("ATD*99#", 30000);
     if (response.indexOf("CONNECT") < 0) {
-        Serial.println("DEBUG: PPP拨号失败");
+        LOG_E("PPP拨号失败");
         connectCount++;
-        return dial(apn, username, password);
+        return connect(apn, username, password);
     }
 
     // 拨号成功
-    Serial.println("DEBUG: PPP拨号成功");
+    LOG_I("PPP拨号成功");
     _inDataMode = true;
     connectCount = 0;  // 重置计数器
     return true;
 }
 
-bool Modem::enterCommandMode() {
+bool Modem::setCommandMode() {
     if (!_inDataMode) {
-        Serial.println("DEBUG: 已经在命令模式");
+        LOG_D("已经在命令模式");
         return true;
     }
 
-    Serial.println("DEBUG: 尝试进入命令模式...");
+    LOG_D("尝试进入命令模式...");
     
     // 等待1秒以上的安静时间
     delay_ms(1100);
@@ -215,36 +211,36 @@ bool Modem::enterCommandMode() {
     return false;
 }
 
-bool Modem::enterDataMode() {
+bool Modem::setDataMode() {
     if (_inDataMode) {
-        Serial.println("DEBUG: 已经在数据模式");
+        LOG_D("已经在数据模式");
         return true;
     }
 
-    Serial.println("DEBUG: 检查PDP状态...");
+    LOG_D("检查PDP状态...");
     
     // 检查PDP上下文状态
     String response = sendCommand("AT+CGACT?");
     if (response.indexOf("+CGACT: 1,1") >= 0) {
         // PDP上下文激活，尝试使用ATO恢复
-        Serial.println("DEBUG: PDP上下文已激活，尝试恢复数据模式");
+        LOG_D("PDP上下文已激活，尝试恢复数据模式");
         response = sendCommand("ATO");
         if (response.indexOf("CONNECT") >= 0) {
             _inDataMode = true;
-            Serial.println("DEBUG: 数据模式恢复成功");
+            LOG_D("数据模式恢复成功");
             return true;
         }
-        Serial.println("DEBUG: ATO恢复失败，尝试重新拨号");
+        LOG_D("ATO恢复失败，尝试重新拨号");
     }
 
     // ATO失败或PDP未激活，尝试重新拨号
-    Serial.println("DEBUG: 尝试重新拨号");
-    return dial("CMNET", "", "");  // 使用中国移动APN重新拨号
+    LOG_D("尝试重新拨号");
+    return connect("CMNET", "", "");  // 使用中国移动APN重新拨号
 }
 
 bool Modem::hangup() {
     // 确保在命令模式
-    if (_inDataMode && !enterCommandMode()) {
+    if (_inDataMode && !setCommandMode()) {
         return false;
     }
 
@@ -271,7 +267,7 @@ bool Modem::checkPPPStatus() {
     }
 
     // 尝试进入命令模式
-    if (!enterCommandMode()) {
+    if (!setCommandMode()) {
         return false;
     }
 
@@ -281,7 +277,7 @@ bool Modem::checkPPPStatus() {
 
     // 如果需要，返回数据模式
     if (hasIP) {
-        enterDataMode();
+        setDataMode();
     }
 
     return hasIP;
