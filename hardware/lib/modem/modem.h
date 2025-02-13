@@ -4,9 +4,14 @@
 #pragma once
 
 #include <Arduino.h>
-#include <PPP.h>
 #include <NetworkInterface.h>
 #include "logger.h" // 添加logger头文件
+#include <lwip/opt.h>
+#include <lwip/sys.h>
+#include <lwip/netif.h>
+#include <netif/ppp/pppapi.h>
+#include <netif/ppp/pppos.h>
+#include <esp_netif.h>
 
 class Modem
 {
@@ -87,9 +92,20 @@ public:
     bool checkPPPStatus();
 
 private:
-    HardwareSerial *_uart; // 串口对象指针
-    PPPClass _ppp;         // PPP对象
-    bool _initialized;     // 初始化标志
+    HardwareSerial *_uart;    // 串口对象指针
+    bool _initialized;        // 初始化标志
+
+    // PPP相关成员
+    ppp_pcb *_ppp_pcb;       // 改名为_ppp_pcb以避免混淆
+    struct netif _ppp_netif;  // PPP网络接口
+    bool _ppp_connected;      // PPP连接状态
+    
+    // PPP相关方法
+    static u32_t _pppOutputCallback(ppp_pcb *pcb, u8_t *data, u32_t len, void *ctx);
+    static void _pppLinkStatusCallback(ppp_pcb *pcb, int err_code, void *ctx);
+    void _pppInputTask();
+    bool _initPPP();
+    void _cleanupPPP();
 
     /**
      * 清空串口缓冲区

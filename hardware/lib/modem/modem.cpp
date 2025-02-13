@@ -3,7 +3,7 @@
 
 Modem modem;
 
-Modem::Modem() : _uart(nullptr), _initialized(false)
+Modem::Modem() : _uart(nullptr), _initialized(false), _ppp_pcb(nullptr), _ppp_connected(false)
 {
 }
 
@@ -14,8 +14,14 @@ Modem::~Modem()
 bool Modem::begin(HardwareSerial &uart)
 {
     _uart = &uart;
-    _initialized = true;
+    _initialized = false;
+    _ppp_pcb = nullptr;
+    _ppp_connected = false;
 
+    // 初始化TCP/IP协议栈
+    esp_netif_init();
+    
+    _initialized = true;
     LOG_MODULE("MODEM");
     LOG_LEVEL(LogLevel::DEBUG);
     LOG_D("初始化调制解调器");
@@ -375,26 +381,59 @@ bool Modem::connect(const char *apn, const char *username, const char *password)
         return connect(apn, username, password);
     }
 
-    // 拨号成功，设置数据模式标志
-    LOG_I("PPP拨号成功");
-    return true;
+    // 在收到CONNECT响应后，初始化PPP
+    if (response.indexOf("CONNECT") >= 0) {
+        LOG_I("调制解调器已切换到数据模式");
+        
+        if (!_initPPP()) {
+            LOG_E("PPP初始化失败");
+            return false;
+        }
+
+        // 启动PPP连接
+        pppapi_connect(_ppp_pcb, 0);
+        
+        // 等待PPP连接建立
+        unsigned long startTime = millis();
+        while (!_ppp_connected && (millis() - startTime < 30000)) {
+            delay(100);
+            
+            // 处理PPP输入数据
+            uint8_t buffer[256];
+            while (_uart->available()) {
+                int len = _uart->read(buffer, sizeof(buffer));
+                if (len > 0) {
+                    pppos_input_tcpip(_ppp_pcb, buffer, len);
+                }
+            }
+        }
+
+        if (_ppp_connected) {
+            LOG_I("PPP连接成功建立");
+            return true;
+        } else {
+            LOG_E("PPP连接超时");
+            _cleanupPPP();
+            return false;
+        }
+    }
+
+    return false;
 }
 
 bool Modem::hangup()
 {
-    // 确保在命令模式
-    if (!isCommandMode() && !setCommandMode())
-    {
+    // 先清理PPP连接
+    _cleanupPPP();
+    
+    // 切换到命令模式
+    if (!setCommandMode()) {
         return false;
     }
 
     // 发送挂断命令
     String response = sendCommand("ATH");
-    if (response.indexOf("OK") >= 0 || response.indexOf("NO CARRIER") >= 0)
-    {
-        return true;
-    }
-    return false;
+    return (response.indexOf("OK") >= 0 || response.indexOf("NO CARRIER") >= 0);
 }
 
 void Modem::delay_ms(uint32_t ms)
@@ -404,5 +443,69 @@ void Modem::delay_ms(uint32_t ms)
     {
         yield();
     }
+}
+
+// PPP输出回调函数
+u32_t Modem::_pppOutputCallback(ppp_pcb *pcb, u8_t *data, u32_t len, void *ctx)
+{
+    Modem* modem = (Modem*)ctx;
+    if (modem && modem->_uart) {
+        return modem->_uart->write(data, len);
+    }
+    return 0;
+}
+
+// PPP链路状态回调函数
+void Modem::_pppLinkStatusCallback(ppp_pcb *pcb, int err_code, void *ctx)
+{
+    Modem* modem = (Modem*)ctx;
+    if (!modem) return;
+
+    if (err_code == PPPERR_NONE) {
+        modem->_ppp_connected = true;
+        struct netif *pppif = ppp_netif(pcb);
+        
+        LOG_I("PPP连接已建立");
+        LOG_I("IP地址: " + String(ip4addr_ntoa(netif_ip4_addr(pppif))));
+        LOG_I("网关: " + String(ip4addr_ntoa(netif_ip4_gw(pppif))));
+        LOG_I("子网掩码: " + String(ip4addr_ntoa(netif_ip4_netmask(pppif))));
+    } else {
+        modem->_ppp_connected = false;
+        LOG_E("PPP连接断开，错误码: " + String(err_code));
+    }
+}
+
+bool Modem::_initPPP()
+{
+    if (_ppp_pcb) {
+        LOG_W("PPP已经初始化");
+        return true;
+    }
+
+    // 创建PPP接口
+    _ppp_pcb = pppapi_pppos_create(&_ppp_netif, 
+                                  _pppOutputCallback,
+                                  _pppLinkStatusCallback, 
+                                  this);
+    
+    if (!_ppp_pcb) {
+        LOG_E("PPP接口创建失败");
+        return false;
+    }
+
+    // 设置为默认接口
+    pppapi_set_default(_ppp_pcb);
+
+    LOG_D("PPP接口创建成功");
+    return true;
+}
+
+void Modem::_cleanupPPP()
+{
+    if (_ppp_pcb) {
+        pppapi_close(_ppp_pcb, 0);
+        _ppp_pcb = nullptr;
+    }
+    _ppp_connected = false;
 }
 
